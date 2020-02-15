@@ -1,12 +1,17 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
+#include <string.h>
 
 const char* ssid = "Cirke";
 const char* password = "kerdojel?";
 
 WiFiUDP Udp;
-unsigned int localUdpPort = 4210;
+//unsigned int localUdpPort = 4210;
+
+const unsigned int ArudinoToPcPort = 42100;
+const unsigned int PcToArduinoPort = 42110;
+
 char incomingPacket[256];
 char replyPacket[] = "Hi there! Got the message :-)";
 
@@ -27,16 +32,12 @@ void setup()
 	Serial.print("Connected, IP address: ");
 	Serial.println(WiFi.localIP());
 
-	Udp.begin(localUdpPort);
+	Udp.begin(PcToArduinoPort);
 }
 
+void HandleIcomingPacket() {
 
-
-void loop()
-{
-	// put your main code here, to run repeatedly:
-
-	int packetSize = Udp.parsePacket();
+	const int packetSize = Udp.parsePacket();
 	if (packetSize)
 	{
 		Serial.printf("Received %d bytes from %s, port %d\n", packetSize, Udp.remoteIP().toString().c_str(), Udp.remotePort());
@@ -48,13 +49,29 @@ void loop()
 		Serial.printf("UDP packet contents: %s\n", incomingPacket);
 
 		if(strcmp(incomingPacket, "query") == 0) {
-			strcpy_s(replyPacket, "{\"succeeded\": true}");
+			strcpy(replyPacket, "{\"succeeded\": true}");
 		} else {
-			strcpy_s(replyPacket, "{\"succeeded\": false}");
+			strcpy(replyPacket, "{\"succeeded\": false}");
 		}
 
-		Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-		Udp.write(replyPacket);
-		Udp.endPacket();
+
+		if(!Udp.beginPacket(Udp.remoteIP(), ArudinoToPcPort)) {
+			Serial.print("beginPacket error");
+			return;
+		}
+		
+		
+		const size_t bytesWritten = Udp.write(replyPacket);
+		Serial.printf("Bytes written: %d", (int)bytesWritten);
+		
+		if(!Udp.endPacket()) {
+			Serial.print("endPacket error");
+		}
 	}
+}
+
+void loop()
+{
+	// put your main code here, to run repeatedly:
+	HandleIcomingPacket();
 }
